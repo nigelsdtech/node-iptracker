@@ -1,0 +1,20 @@
+{
+  "name": "node-iptracker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "sh scripts/start.sh",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "config": "^1.26.2",
+    "gmail-model": "github:nigelsdtech/gmail-model",
+    "log": "^1.4.0",
+    "reporter": "github:nigelsdtech/reporter",
+    "request": "^2.83.0"
+  }
+}
