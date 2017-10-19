@@ -60,4 +60,4 @@ typings/
 *.swp
 
 config/custom-environment-variables.json
-.last_ip.txt
+.last_ip.json

@@ -5,7 +5,7 @@ module.exports = {
 
   appName: "iptracker",
 
-  ipStoreFile: ".last_ip.txt",
+  IPStoreFile: ".last_ip.json",
 
   ipservice: "http://ifconfig.co",
 
