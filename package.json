@@ -17,9 +17,7 @@
     "log": "^1.4.0",
     "q": "^1.5.0",
     "reporter": "github:nigelsdtech/reporter",
-    "request": "^2.83.0"
-  },
-  "devDependencies": {
+    "request": "^2.83.0",
     "ifconfig-linux": "^0.1.0"
   }
 }
