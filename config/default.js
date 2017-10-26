@@ -5,9 +5,9 @@ module.exports = {
 
   appName: "iptracker",
 
-  IPStoreFile: ".last_ip.json",
+  ipStoreFile: ".last_ip.json",
 
-  ipservice: "http://ifconfig.co",
+  ipService: "http://ifconfig.co",
 
   log: {
     appName: defer(function (cfg) { return cfg.appName } ),
@@ -17,7 +17,7 @@ module.exports = {
         {
           type:       "file",
           filename:   defer(function (cfg) { return cfg.log.logDir.concat("/" , cfg.appName , ".log" ) }),
-          category:   defer(function (cfg) { return cfg.appName }),
+          category:   defer(function (cfg) { return cfg.log.appName }),
           reloadSecs: 60,
           maxLogSize: 1024000
         },

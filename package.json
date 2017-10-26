@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "sh scripts/start.sh",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "sh scripts/test.sh"
   },
   "keywords": [],
   "author": "",
@@ -13,11 +13,18 @@
   "dependencies": {
     "config": "^1.26.2",
     "gmail-model": "github:nigelsdtech/gmail-model",
+    "ifconfig-linux": "^0.1.0",
     "jsonfile": "^4.0.0",
-    "log": "^1.4.0",
+    "log4js": "^0.6.37",
     "q": "^1.5.0",
     "reporter": "github:nigelsdtech/reporter",
-    "request": "^2.83.0",
-    "ifconfig-linux": "^0.1.0"
+    "request": "^2.83.0"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "mocha": "^4.0.1",
+    "mocha-each": "^1.1.0",
+    "nock": "^9.0.25",
+    "rewire": "^2.5.2"
   }
 }

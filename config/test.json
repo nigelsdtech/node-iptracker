@@ -1,0 +1,12 @@
+{
+  "appName": "ipTracker-test",
+  "ipStoreFile": ".last_ip_test.json",
+
+  "log" : {
+    "level": "ERROR",
+    "log4jsConfigs": {
+      "replaceConsole": false
+    }
+  }
+
+}
