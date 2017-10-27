@@ -3,7 +3,6 @@
 var
   cfg       = require('config'),
   chai      = require('chai'),
-  forEach   = require('mocha-each'),
   fs        = require('fs'),
   jsonFile  = require('jsonfile'),
   nock      = require('nock'),
@@ -27,6 +26,11 @@ var timeout = (1000*60)
  */
 
 var serviceStubExtIP = "999.99.9.99"
+var successfulEmailBody = "New details - NEW_IPS"
+successfulEmailBody    += "<p>"
+successfulEmailBody    += "Old details - OLD_IPS"
+
+
 
 /*
  * Stubbed external IP service
@@ -44,19 +48,18 @@ function stubExtIpService (params) {
     "hostname":"fiction.test.com"
   }
 
-
-
-  return nock(cfg.ipService, {
+  var ret = nock(cfg.ipService, {
     reqheaders: {
       'Accept': 'application/json'
     }
   })
   .get('/')
-  .reply(params.response.statusCode, params.response.body)
-  .persist()
-}
 
-stubExtIpService();
+
+  if (params.replyWithError) return ret.replyWithError(params.replyWithError)
+
+  return ret.reply(params.response.statusCode, params.response.body)
+}
 
 
 /*
@@ -94,7 +97,10 @@ function cleanup (params,cb) {
   if (!params.hasOwnProperty('ipStoreFile') || params.ipStorFile) { jobs.push(Q.nfcall(fs.unlink, cfg.ipStoreFile)) }
 
   Q.all(jobs)
-  .done(  function ()    { cb() })
+  .catch( function (err) {
+    if (!err.code == "ENOENT") console.log(err);
+  })
+  .done(function () { cb() })
 
 }
 
@@ -128,7 +134,7 @@ var testCases = [
   { describe: "Running the script when only the external IP has changed",
   it: "leaves the last_ip file with the latest known IPs",
   oldIPStoreContents: {external:"1.2.3.4",        internal: serviceStubIntIP},
-  newIPStoreContents: {external:"1.2.3.4",        internal: serviceStubIntIP}},
+  newIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP}},
 
   { describe: "Running the script when only the internal IP has changed",
   it: "leaves the last_ip file with the latest known IPs",
@@ -145,24 +151,39 @@ var testCases = [
   oldIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP},
   newIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP},
   oldIPStoreOverrides: {
-    exists : { completionNoticeExpected: false }}}
+    exists : { completionNoticeExpected: false }}},
 
-]
-
-var moreTestCases = [
-
-  { describe: "Running the script when the external IP service is unavailable",
+  { describe: "Running the script when the external IP service returns a bad response",
   it: "does not update the last_ip file",
+  extIpServiceStub: {
+    response: {
+      body: "Service Unavailable",
+      statusCode: 500 }},
   oldIPStoreContents: {external:"1.2.3.4",        internal: "5.6.7.8"},
   newIPStoreContents: {external:"1.2.3.4",        internal: "5.6.7.8"},
   completionNoticeExpected: false,
-  errorNoticeExpected: true},
+  errorNoticeExpected: true,
+  oldIPStoreOverrides: {
+    doesntExist : {
+      checkIPStoreOnCompletion: false,
+      IPStoreExistsOnCompletion: false }}},
 
+  { describe: "Running the script when the external IP service request fails",
+  it: "does not update the last_ip file",
+  extIpServiceStub: {
+    replyWithError: "simulated failure" },
+  oldIPStoreContents: {external:"1.2.3.4",        internal: "5.6.7.8"},
+  newIPStoreContents: {external:"1.2.3.4",        internal: "5.6.7.8"},
+  completionNoticeExpected: false,
+  errorNoticeExpected: true,
+  oldIPStoreOverrides: {
+    doesntExist : {
+      checkIPStoreOnCompletion: false,
+      IPStoreExistsOnCompletion: false }}}
 
 ]
 
 testCases.forEach( (el) => {
-
 
   /*
    * Start with the main test case
@@ -176,39 +197,46 @@ testCases.forEach( (el) => {
     /*
      * Deviate based on whether a last_ip file existed when the script started
      */
-    oldIPStoreFileExists.forEach( (exists) => {
+    oldIPStoreFileExists.forEach( (storeExists) => {
 
 
       /*
        * Set up tests specific to this case
        */
-      var completionNoticeExpected = (el.hasOwnProperty('completionNoticeExpected'))? el.completionNoticeExpected : true
-      var errorNoticeExpected      = (el.hasOwnProperty('errorNoticeExpected'))?      el.errorNoticeExpected : false
-      var oldIPStoreOverrides      = (el.hasOwnProperty('oldIPStoreOverrides'))?      el.oldIPStoreOverrides : { exists:{}, doesntExist: {} }
+      var completionNoticeExpected  = (el.hasOwnProperty('completionNoticeExpected'))?  el.completionNoticeExpected  : true
+      var errorNoticeExpected       = (el.hasOwnProperty('errorNoticeExpected'))?       el.errorNoticeExpected       : false
+      var checkIPStoreOnCompletion  = (el.hasOwnProperty('checkIPStoreOnCompletion'))?  el.checkIPStoreOnCompletion  : false
+      var IPStoreExistsOnCompletion = (el.hasOwnProperty('IPStoreExistsOnCompletion'))? el.IPStoreExistsOnCompletion : true
+      var oldIPStoreOverrides       = (el.hasOwnProperty('oldIPStoreOverrides'))?       el.oldIPStoreOverrides       : { exists:{}, doesntExist: {} }
 
       oldIPStoreOverrides.exists      = (oldIPStoreOverrides.hasOwnProperty('exists'))?       oldIPStoreOverrides.exists      : {}
       oldIPStoreOverrides.doesntExist = (oldIPStoreOverrides.hasOwnProperty('doesntExist'))?  oldIPStoreOverrides.doesntExist : {}
 
 
 
-      if (exists) {
-        completionNoticeExpected = (oldIPStoreOverrides.exists.hasOwnProperty('completionNoticeExpected'))?      oldIPStoreOverrides.exists.completionNoticeExpected      : completionNoticeExpected
-        errorNoticeExpected      = (oldIPStoreOverrides.exists.hasOwnProperty('errorNoticeExpected'))?           oldIPStoreOverrides.exists.errorNoticeExpected           : errorNoticeExpected
-	console.log('SteveFlag 5 - ' + completionNoticeExpected)
+      if (storeExists) {
+        completionNoticeExpected  = (oldIPStoreOverrides.exists.hasOwnProperty('completionNoticeExpected'))?       oldIPStoreOverrides.exists.completionNoticeExpected       : completionNoticeExpected
+        errorNoticeExpected       = (oldIPStoreOverrides.exists.hasOwnProperty('errorNoticeExpected'))?            oldIPStoreOverrides.exists.errorNoticeExpected            : errorNoticeExpected
+        checkIPStoreOnCompletion  = (oldIPStoreOverrides.exists.hasOwnProperty('checkIPStoreOnCompletion'))?       oldIPStoreOverrides.exists.checkIPStoreOnCompletion       : checkIPStoreOnCompletion
       } else {
-        completionNoticeExpected = (oldIPStoreOverrides.doesntExist.hasOwnProperty('completionNoticeExpected'))? oldIPStoreOverrides.doesntExist.completionNoticeExpected : completionNoticeExpected
-        errorNoticeExpected      = (oldIPStoreOverrides.doesntExist.hasOwnProperty('errorNoticeExpected'))?      oldIPStoreOverrides.doesntExist.errorNoticeExpected      : errorNoticeExpected
+        completionNoticeExpected  = (oldIPStoreOverrides.doesntExist.hasOwnProperty('completionNoticeExpected'))?  oldIPStoreOverrides.doesntExist.completionNoticeExpected  : completionNoticeExpected
+        errorNoticeExpected       = (oldIPStoreOverrides.doesntExist.hasOwnProperty('errorNoticeExpected'))?       oldIPStoreOverrides.doesntExist.errorNoticeExpected       : errorNoticeExpected
+        checkIPStoreOnCompletion  = (oldIPStoreOverrides.doesntExist.hasOwnProperty('checkIPStoreOnCompletion'))?  oldIPStoreOverrides.doesntExist.checkIPStoreOnCompletion  : checkIPStoreOnCompletion
+        IPStoreExistsOnCompletion = (oldIPStoreOverrides.doesntExist.hasOwnProperty('IPStoreExistsOnCompletion'))? oldIPStoreOverrides.doesntExist.IPStoreExistsOnCompletion : IPStoreExistsOnCompletion
       }
 
 
       var description = "last_ip store file "
-      description    += (exists)? "exists": "doesn't exist"
+      description    += (storeExists)? "exists": "doesn't exist"
+      description    += " at startup"
 
 
       /*
        * Here's the sub test based on the last_ip file
        */
       describe(description, function () {
+
+       this.timeout(timeout)
 
 
         var completionNoticeSpy = null
@@ -219,13 +247,17 @@ testCases.forEach( (el) => {
 
           completionNoticeSpy = sinon.spy();
           errorNoticeSpy      = sinon.spy();
+
+          var extIPServiceStub = stubExtIpService( (el.hasOwnProperty('extIpServiceStub'))? el.extIpServiceStub : null)
+
           restore = ipTracker.__set__('reporter', {
             configure: function () {},
             handleError: errorNoticeSpy,
             sendCompletionNotice: completionNoticeSpy
           })
 
-          if (exists) {
+
+          if (storeExists) {
             createStubStoreFile(el.oldIPStoreContents, () => {ipTracker(done)})
           } else {
             ipTracker(done)
@@ -237,16 +269,30 @@ testCases.forEach( (el) => {
 	 * Test for the final value of the ip store file
 	 */
 
-        it(el.it, function(done) {
-          jsonFile.readFile(cfg.ipStoreFile, function(err, storeFileIPs) {
-            if (err) throw new Error ('Error loading last_ip file: ' + err)
-            storeFileIPs.external.should.equal(serviceStubExtIP)
-            storeFileIPs.internal.should.equal(serviceStubIntIP)
-            done()
+        if (checkIPStoreOnCompletion) {
+          it(el.it, function(done) {
+            jsonFile.readFile(cfg.ipStoreFile, function(err, storeFileIPs) {
+              if (err) throw new Error ('Error loading last_ip file: ' + err)
+              storeFileIPs.external.should.equal(el.newIPStoreContents.external)
+              storeFileIPs.internal.should.equal(el.newIPStoreContents.internal)
+              done()
+            })
           })
-        })
+        }
 
 
+        /*
+	 * Test the existence of the IP store on completion
+	 */
+
+        if (!IPStoreExistsOnCompletion) {
+          it("last_ip store file doesn't exist on completion", function(done) {
+            jsonFile.readFile(cfg.ipStoreFile, function(err, storeFileIPs) {
+              err.code.should.equal('ENOENT')
+              done()
+            })
+          })
+        }
 
         /*
          * Test for a completion notice
