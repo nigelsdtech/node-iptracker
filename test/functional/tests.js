@@ -26,10 +26,6 @@ var timeout = (1000*60)
  */
 
 var serviceStubExtIP = "999.99.9.99"
-var successfulEmailBody = "New details - NEW_IPS"
-successfulEmailBody    += "<p>"
-successfulEmailBody    += "Old details - OLD_IPS"
-
 
 
 /*
@@ -62,14 +58,21 @@ function stubExtIpService (params) {
 }
 
 
+var serviceStubIntIP = "88.8.8.88"
 /*
  * Stubbed internal IP service
  */
+function stubIntIpService (params) {
 
-var serviceStubIntIP = "88.8.8.88"
-var ipTrackerRewire = ipTracker.__set__('ifconfig', function (p,cb) {
-    return Q.resolve({ eth0: { inet: { addr: serviceStubIntIP } } })
-})
+  if (!params) params = {}
+  if (!params.response) params.response = { eth0: { inet: { addr: serviceStubIntIP } } }
+
+  var retFn = function (p,cb) {return Q.resolve(params.response)}
+  if (params.replyWithError) { retFn = function (p,cb) { return Q.reject(params.replyWithError) } }
+
+  var ipTrackerRewire = ipTracker.__set__('ifconfig', retFn)
+}
+
 
 
 
@@ -179,9 +182,37 @@ var testCases = [
   oldIPStoreOverrides: {
     doesntExist : {
       checkIPStoreOnCompletion: false,
+      IPStoreExistsOnCompletion: false }}},
+
+  { describe: "Running the script when the internal IP service fails",
+  it: "does not update the last_ip file",
+  intIpServiceStub: {
+    replyWithError: "simulated failure" },
+  oldIPStoreContents: {external:"1.2.3.4",        internal: "5.6.7.8"},
+  newIPStoreContents: {external:"1.2.3.4",        internal: "5.6.7.8"},
+  completionNoticeExpected: false,
+  errorNoticeExpected: true,
+  oldIPStoreOverrides: {
+    doesntExist : {
+      checkIPStoreOnCompletion: false,
+      IPStoreExistsOnCompletion: false }}},
+
+  { describe: "Running the script when the internal IP service doesn't return eth0",
+  it: "does not update the last_ip file",
+  intIpServiceStub: {
+    response: { malformed_response: [] } },
+  oldIPStoreContents: {external:"1.2.3.4",        internal: "5.6.7.8"},
+  newIPStoreContents: {external:"1.2.3.4",        internal: "5.6.7.8"},
+  completionNoticeExpected: false,
+  errorNoticeExpected: true,
+  oldIPStoreOverrides: {
+    doesntExist : {
+      checkIPStoreOnCompletion: false,
       IPStoreExistsOnCompletion: false }}}
 
 ]
+
+
 
 testCases.forEach( (el) => {
 
@@ -236,7 +267,7 @@ testCases.forEach( (el) => {
        */
       describe(description, function () {
 
-       this.timeout(timeout)
+        this.timeout(timeout)
 
 
         var completionNoticeSpy = null
@@ -249,6 +280,7 @@ testCases.forEach( (el) => {
           errorNoticeSpy      = sinon.spy();
 
           var extIPServiceStub = stubExtIpService( (el.hasOwnProperty('extIpServiceStub'))? el.extIpServiceStub : null)
+          var intIPServiceStub = stubIntIpService( (el.hasOwnProperty('intIpServiceStub'))? el.intIpServiceStub : null)
 
           restore = ipTracker.__set__('reporter', {
             configure: function () {},
@@ -341,26 +373,79 @@ testCases.forEach( (el) => {
 
 
 
-describe("Running the script when the external IP service is unavailable", function () {
-
-  it("does not update the last_ip file")
-  it("sends an error message")
-})
-
-describe("Running the script when the internal IP service doesn't return eth0", function () {
-
-  it("does not update the last_ip file")
-  it("sends an error message")
-})
-
 
 describe("Problems with the last_ip file", function () {
 
 
   describe("when the last_ip file can't be opened", function () {
-    it("sends an error message")
-    it("doesn't alter the last_ip file")
+
+      this.timeout(timeout)
+
+
+      var completionNoticeSpy = null
+      var errorNoticeSpy      = null
+      var restore = null
+
+      before( function(done) {
+
+        completionNoticeSpy = sinon.spy();
+        errorNoticeSpy      = sinon.spy();
+
+        var extIPServiceStub = stubExtIpService( (el.hasOwnProperty('extIpServiceStub'))? el.extIpServiceStub : null)
+        var intIPServiceStub = stubIntIpService( (el.hasOwnProperty('intIpServiceStub'))? el.intIpServiceStub : null)
+
+        restore = ipTracker.__set__('reporter', {
+          configure: function () {},
+          handleError: errorNoticeSpy,
+          sendCompletionNotice: completionNoticeSpy
+        })
+
+
+        createStubStoreFile(el.oldIPStoreContents, () => {ipTracker(done)})
+      })
+
+
+      /*
+       * Test for the final value of the ip store file
+       */
+
+      if (checkIPStoreOnCompletion) {
+        it("creates a new IP store file with the new IPs", function(done) {
+          jsonFile.readFile(cfg.ipStoreFile, function(err, storeFileIPs) {
+            if (err) throw new Error ('Error loading last_ip file: ' + err)
+            storeFileIPs.external.should.equal(el.newIPStoreContents.external)
+            storeFileIPs.internal.should.equal(el.newIPStoreContents.internal)
+            done()
+          })
+        })
+      }
+
+
+      /*
+       * Test for a completion notice
+       */
+
+      it("sends a completion notice with the new and old IP's", function (done) {
+        completionNoticeSpy.callCount.should.equal(1)
+        done()
+      })
+
+      /*
+       * Test for an error message
+       */
+      it("sends an error notice", function (done) {
+        errorNoticeSpy.callCount.should.equal(1)
+        done()
+      })
+
+      after( function (done) {
+        restore()
+        cleanup(null,done)
+      })
+
+    })
   })
+
 
 
   describe("when the last_ip file can't be written to", function () {
@@ -369,25 +454,4 @@ describe("Problems with the last_ip file", function () {
   })
 
 
-})
-
-
-describe("Problems with reporter emails", function () {
-
-
-  describe("when the completion notice fails", function () {
-    it("sends an error message")
-    it("doesn't alter the last_ip file")
-  })
-
-
-  describe("error notice fails", function () {
-    it("sends an error message")
-    it("doesn't alter the last_ip file")
-  })
-
-
-  after(function (done) {
-    done()
-  });
 })
