@@ -49,8 +49,7 @@ function stubExtIpService (params) {
       'Accept': 'application/json'
     }
   })
-  .get('/')
-
+  .get("/")
 
   if (params.replyWithError) return ret.replyWithError(params.replyWithError)
 
@@ -376,82 +375,135 @@ testCases.forEach( (el) => {
 
 describe("Problems with the last_ip file", function () {
 
+  this.timeout(timeout)
+
+
+  var completionNoticeSpy = null
+  var errorNoticeSpy      = null
+  var restoreReporter     = null
+
+
 
   describe("when the last_ip file can't be opened", function () {
 
-      this.timeout(timeout)
+    before( function(done) {
+
+      completionNoticeSpy = sinon.spy();
+      errorNoticeSpy      = sinon.spy();
+
+      var extIPServiceStub = stubExtIpService(null)
+      var intIPServiceStub = stubIntIpService(null)
+
+      restoreReporter = ipTracker.__set__('reporter', {
+        configure: function () {},
+        handleError: errorNoticeSpy,
+        sendCompletionNotice: completionNoticeSpy
+      })
+
+      var restoreJsonFile = ipTracker.__set__('jsonFile.readFile', function (file, cb) {
+        var err = new Error("Simulated failure")
+        cb(err)
+      })
 
 
-      var completionNoticeSpy = null
-      var errorNoticeSpy      = null
-      var restore = null
-
-      before( function(done) {
-
-        completionNoticeSpy = sinon.spy();
-        errorNoticeSpy      = sinon.spy();
-
-        var extIPServiceStub = stubExtIpService( (el.hasOwnProperty('extIpServiceStub'))? el.extIpServiceStub : null)
-        var intIPServiceStub = stubIntIpService( (el.hasOwnProperty('intIpServiceStub'))? el.intIpServiceStub : null)
-
-        restore = ipTracker.__set__('reporter', {
-          configure: function () {},
-          handleError: errorNoticeSpy,
-          sendCompletionNotice: completionNoticeSpy
+      createStubStoreFile({external: "1.2.3.4", internal: "5.6.7.8"}, function () {
+        ipTracker(function () {
+          restoreJsonFile()
+          done()
         })
-
-
-        createStubStoreFile(el.oldIPStoreContents, () => {ipTracker(done)})
       })
-
-
-      /*
-       * Test for the final value of the ip store file
-       */
-
-      if (checkIPStoreOnCompletion) {
-        it("creates a new IP store file with the new IPs", function(done) {
-          jsonFile.readFile(cfg.ipStoreFile, function(err, storeFileIPs) {
-            if (err) throw new Error ('Error loading last_ip file: ' + err)
-            storeFileIPs.external.should.equal(el.newIPStoreContents.external)
-            storeFileIPs.internal.should.equal(el.newIPStoreContents.internal)
-            done()
-          })
-        })
-      }
-
-
-      /*
-       * Test for a completion notice
-       */
-
-      it("sends a completion notice with the new and old IP's", function (done) {
-        completionNoticeSpy.callCount.should.equal(1)
-        done()
-      })
-
-      /*
-       * Test for an error message
-       */
-      it("sends an error notice", function (done) {
-        errorNoticeSpy.callCount.should.equal(1)
-        done()
-      })
-
-      after( function (done) {
-        restore()
-        cleanup(null,done)
-      })
-
     })
+
+
+    /*
+     * Test for the final value of the ip store file
+     */
+
+    it("creates a new IP store file with the known IPs", function(done) {
+      jsonFile.readFile(cfg.ipStoreFile, function(err, storeFileIPs) {
+        if (err) throw new Error ('Error loading last_ip file: ' + err)
+        storeFileIPs.external.should.equal(serviceStubExtIP)
+        storeFileIPs.internal.should.equal(serviceStubIntIP)
+        done()
+      })
+    })
+
+    /*
+     * Test for a completion notice
+     */
+
+    it("sends a completion notice with the new and old IP's", function (done) {
+      completionNoticeSpy.callCount.should.equal(1)
+      done()
+    })
+
+    /*
+     * Test for an error message
+     */
+    it("sends an error notice", function (done) {
+      errorNoticeSpy.callCount.should.equal(1)
+      done()
+    })
+
   })
 
 
 
   describe("when the last_ip file can't be written to", function () {
-    it("sends an error message")
-    it("doesn't alter the last_ip file")
+
+    before( function(done) {
+
+      completionNoticeSpy = sinon.spy();
+      errorNoticeSpy      = sinon.spy();
+
+      var extIPServiceStub = stubExtIpService(null)
+      var intIPServiceStub = stubIntIpService(null)
+
+      restoreReporter = ipTracker.__set__('reporter', {
+        configure: function () {},
+        handleError: errorNoticeSpy,
+        sendCompletionNotice: completionNoticeSpy
+      })
+
+      createStubStoreFile({external: "1.2.3.4", internal: "5.6.7.8"}, function () {
+
+        var restoreJsonFile = ipTracker.__set__('jsonFile.writeFile', function (file, contents, cb) {
+          var err = new Error("Simulated failure")
+          cb(err)
+        })
+
+
+        ipTracker(function () {
+          restoreJsonFile()
+          done()
+        })
+      })
+    })
+
+
+    /*
+     * Test for a completion notice
+     */
+
+    it("sends a completion notice with the new and old IP's", function (done) {
+      completionNoticeSpy.callCount.should.equal(1)
+      done()
+    })
+
+    /*
+     * Test for an error message
+     */
+    it("sends an error notice", function (done) {
+      errorNoticeSpy.callCount.should.equal(1)
+      done()
+    })
+
+
   })
 
+  after( function (done) {
+    restoreReporter()
+    cleanup(null,done)
+  })
 
 })
