@@ -3,7 +3,21 @@ var defer = require('config/defer').deferConfig;
 
 module.exports = {
 
-  appName: "iptracker",
+  appName: "ipTracker",
+
+  auth: {
+    credentialsDir:   process.env.HOME+"/.credentials",
+    clientSecretFile: defer( function (cfg) { return cfg.auth.credentialsDir+"/client_secret.json" } ),
+    tokenFileDir:     defer( function (cfg) { return cfg.auth.credentialsDir } ),
+    tokenFile:        defer( function (cfg) { return "access_token_"+cfg.appName+".json" } ),
+    scopes:           defer( function (cfg) { return cfg.drive.scopes } )
+  },
+
+  drive: {
+    scopes: ['https://www.googleapis.com/auth/drive'],
+    folderName: 'iptracker',
+    templateFile: 'OVERRIDE_ME_WITH_A_PATH_TO_A_LOCAL_FILE'
+  },
 
   ipStoreFile: ".last_ip.json",
 

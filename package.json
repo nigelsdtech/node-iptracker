@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "config": "^1.26.2",
+    "gdrive-model": "git://github.com/nigelsdtech/gdrive-model.git",
     "gmail-model": "github:nigelsdtech/gmail-model",
     "ifconfig-linux": "^0.1.0",
     "jsonfile": "^4.0.0",

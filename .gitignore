@@ -61,3 +61,4 @@ typings/
 
 config/custom-environment-variables.json
 .last_ip.json
+config/local*.js*

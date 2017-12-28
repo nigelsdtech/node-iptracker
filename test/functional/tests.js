@@ -96,7 +96,10 @@ function cleanup (params,cb) {
   if (!params) { params = {} }
 
   // Clean up the ipStoreFile
-  if (!params.hasOwnProperty('ipStoreFile') || params.ipStorFile) { jobs.push(Q.nfcall(fs.unlink, cfg.ipStoreFile)) }
+  if (!params.hasOwnProperty('ipStoreFile') || params.ipStoreFile) { jobs.push(Q.nfcall(fs.unlink, cfg.ipStoreFile)) }
+
+
+  // Clean up google drive
 
   Q.all(jobs)
   .catch( function (err) {
