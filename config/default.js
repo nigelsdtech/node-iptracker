@@ -15,7 +15,7 @@ module.exports = {
 
   drive: {
     scopes: ['https://www.googleapis.com/auth/drive'],
-    folderName: 'iptracker',
+    folderName: defer(function (cfg) { return cfg.appName } ),
     templateFile: 'OVERRIDE_ME_WITH_A_PATH_TO_A_LOCAL_FILE'
   },
 

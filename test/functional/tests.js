@@ -1,15 +1,17 @@
 'use strict'
 
 var
-  cfg       = require('config'),
-  chai      = require('chai'),
-  fs        = require('fs'),
-  jsonFile  = require('jsonfile'),
-  nock      = require('nock'),
-  Q         = require('q'),
-  rewire    = require('rewire'),
-  sinon     = require('sinon'),
-  ipTracker = rewire('../../lib/iptracker.js')
+  cfg          = require('config'),
+  chai         = require('chai'),
+  fs           = require('fs'),
+  gdriveModel  = require('gdrive-model'),
+  jsonFile     = require('jsonfile'),
+  nock         = require('nock'),
+  path         = require('path'),
+  Q            = require('q'),
+  rewire       = require('rewire'),
+  sinon        = require('sinon'),
+  ipTracker    = rewire('../../lib/iptracker.js')
 
 /*
  * Set up chai
@@ -98,12 +100,14 @@ function cleanup (params,cb) {
   // Clean up the ipStoreFile
   if (!params.hasOwnProperty('ipStoreFile') || params.ipStoreFile) { jobs.push(Q.nfcall(fs.unlink, cfg.ipStoreFile)) }
 
+  // Clean up Google drive file
+  if (params.hasOwnProperty('gdriveFolderId')) { jobs.push(Q.nfcall(trashTestGDriveFolder, {folderId: params.gdriveFolderId})) }
 
   // Clean up google drive
 
   Q.all(jobs)
   .catch( function (err) {
-    if (!err.code == "ENOENT") console.log(err);
+    if (!err.code == "ENOENT") console.error(err);
   })
   .done(function () { cb() })
 
@@ -129,6 +133,66 @@ function createStubStoreFile (params,cb) {
   });
 
 }
+
+
+
+var personalGdrive = new gdriveModel({
+  googleScopes        : cfg.drive.scopes,
+  clientSecretFile    : cfg.auth.clientSecretFile,
+  tokenDir            : cfg.auth.tokenFileDir,
+  tokenFile           : cfg.auth.tokenFile
+});
+
+/**
+ * createTestGDriveFolder
+ * @desc Create a temp google drive folder for test purposes
+ *
+ * @param {object}  params - currently unused
+ *
+ * @returns cb(err, folder) where folder is the google drive object representing the folder
+ */
+function createTestGDriveFolder (params,cb) {
+
+  var d = new Date();
+  var desc =  "Test folder created by " + cfg.appName + " on " + d.toString();
+  var title = cfg.drive.folderName;
+
+  personalGdrive.createFile ({
+    isFolder : true,
+    resource: {
+      description: desc,
+      title: title
+    }
+  }, function (err, folder) {
+    if (err) { cb(err); return null; }
+    cb(null,folder);
+  })
+
+}
+
+/**
+ * trashTestGDriveFolder
+ * @desc Trash a temp google drive folder for test purposes
+ *
+ * @param {object}  params - currently unused
+ * @param {string}  params.folderId - ID of the folder to be deleted
+ *
+ * @returns cb(err)
+ */
+function trashTestGDriveFolder (params,cb) {
+
+  personalGdrive.trashFiles ({
+    fileIds: [params.folderId],
+    deletePermanently: true
+  }, function (err, folder) {
+    if (err) { cb(err); return null; }
+    cb(null,folder);
+  })
+
+}
+
+
+
 
 
 /*
@@ -222,7 +286,12 @@ testCases.forEach( (el) => {
    * Start with the main test case
    */
 
-  describe(el.describe, function () {
+  var describeFn = describe
+  if (el.only) {
+    describeFn = describe.only
+  }
+
+  describeFn(el.describe, function () {
 
     var oldIPStoreFileExists = [ true, false ]
 
@@ -264,6 +333,7 @@ testCases.forEach( (el) => {
       description    += " at startup"
 
 
+
       /*
        * Here's the sub test based on the last_ip file
        */
@@ -274,7 +344,8 @@ testCases.forEach( (el) => {
 
         var completionNoticeSpy = null
         var errorNoticeSpy      = null
-        var restore = null
+        var restore             = null
+        var gdriveFolderId      = null
 
         before( function(done) {
 
@@ -291,11 +362,32 @@ testCases.forEach( (el) => {
           })
 
 
+          var completionJobs = [
+            Q.nfcall(createTestGDriveFolder, null)
+	  ]
+
           if (storeExists) {
-            createStubStoreFile(el.oldIPStoreContents, () => {ipTracker(done)})
-          } else {
-            ipTracker(done)
+            completionJobs.push(Q.nfcall(createStubStoreFile,el.oldIPStoreContents))
           }
+
+          Q.all(completionJobs)
+          .spread (function (gdriveFolder) {
+
+            gdriveFolderId = gdriveFolder.id
+            return Q.nfcall(ipTracker,null)
+	  })
+          .done(function () {
+            done()
+          });
+
+
+        })
+
+        after( function (done) {
+          restore()
+          cleanup({
+            gdriveFolderId: gdriveFolderId
+          },done)
         })
 
 
@@ -329,20 +421,70 @@ testCases.forEach( (el) => {
         }
 
         /*
-         * Test for a completion notice
+         * Test for a completion notice (by email and in gdrive)
          */
 
         var completionNoticeIt        = "doesn't send a completion notice"
         var completionNoticeCallCount = 0
+
+        var gdriveUploadIt            = "doesn't upload a change report to the google drive"
+        var gdriveFileCount           = 0
+
+        var webViewLink               = ""
+
         if (completionNoticeExpected) {
           completionNoticeIt = "sends a completion notice with the new and old IP's"
           completionNoticeCallCount = 1
+
+          gdriveUploadIt  = "uploads a change report to the google drive"
+          gdriveFileCount = 1
         }
+
+        it(gdriveUploadIt, function(done) {
+
+          personalGdrive.listFiles({
+            freetextSearch: '"' + gdriveFolderId + '" in parents and name = "' + path.basename(cfg.drive.templateFile) + '"',
+            spaces: "drive",
+            retFields: ['files(mimeType,size,webViewLink)']
+          }, function (err, retFiles) {
+
+            if (err) throw err
+
+            retFiles.length.should.equal(gdriveFileCount);
+            if (completionNoticeExpected) {
+              retFiles[0].mimeType.should.equal('text/plain')
+              retFiles[0].size.should.not.equal('0')
+              webViewLink = retFiles[0].webViewLink
+	    }
+
+            done();
+          });
+        })
+
 
         it(completionNoticeIt, function (done) {
           completionNoticeSpy.callCount.should.equal(completionNoticeCallCount)
+
+          if (completionNoticeExpected) {
+            var emailBody = 'New details - {"external":"' + el.newIPStoreContents.external + '","internal":"' + el.newIPStoreContents.internal + '"}'
+            emailBody    += '<p>'
+            if (storeExists) {
+              emailBody    += 'Old details - {"external":"' + el.oldIPStoreContents.external + '","internal":"' + el.oldIPStoreContents.internal + '"}'
+            } else {
+              emailBody    += 'Old details - {"external":"-1","internal":"-1"}'
+            }
+            emailBody    += '<p>'
+            emailBody    += 'File upload: ' + webViewLink
+
+            var completionNoticeArgs = {
+              body: emailBody
+            }
+            completionNoticeSpy.getCall(0).args[0].should.deep.equal(completionNoticeArgs)
+          }
+
           done()
 	})
+
 
         /*
          * Test for an error message
@@ -359,24 +501,16 @@ testCases.forEach( (el) => {
           errorNoticeSpy.callCount.should.equal(errorNoticeCallCount)
           done()
 	})
-
-        after( function (done) {
-          restore()
-          cleanup(null,done)
-        })
       })
     })
   })
-
-
-
 })
 
 
 
 
 
-describe("Problems with the last_ip file", function () {
+describe.only("Problems with the last_ip file", function () {
 
   this.timeout(timeout)
 
@@ -389,6 +523,8 @@ describe("Problems with the last_ip file", function () {
 
   describe("when the last_ip file can't be opened", function () {
 
+
+    var restoreReporter, gdriveFolderId
     before( function(done) {
 
       completionNoticeSpy = sinon.spy();
@@ -409,14 +545,29 @@ describe("Problems with the last_ip file", function () {
       })
 
 
-      createStubStoreFile({external: "1.2.3.4", internal: "5.6.7.8"}, function () {
-        ipTracker(function () {
-          restoreJsonFile()
-          done()
-        })
+      var completionJobs = [
+        Q.nfcall(createTestGDriveFolder, null),
+        Q.nfcall(createStubStoreFile,{external: "1.2.3.4", internal: "5.6.7.8"})
+      ]
+
+      Q.all(completionJobs)
+      .spread (function (gdriveFolder, empty) {
+        gdriveFolderId = gdriveFolder.id
+        return Q.nfcall(ipTracker,null)
       })
+      .done(function () {
+        restoreJsonFile()
+        done()
+      });
+
     })
 
+    after( function (done) {
+      restoreReporter()
+      cleanup({
+        gdriveFolderId: gdriveFolderId
+      },done)
+    })
 
     /*
      * Test for the final value of the ip store file
@@ -440,6 +591,8 @@ describe("Problems with the last_ip file", function () {
       done()
     })
 
+    it("uploads a change report to the google drive")
+
     /*
      * Test for an error message
      */
@@ -453,6 +606,9 @@ describe("Problems with the last_ip file", function () {
 
 
   describe("when the last_ip file can't be written to", function () {
+
+
+    var restoreReporter, gdriveFolderId
 
     before( function(done) {
 
@@ -468,21 +624,38 @@ describe("Problems with the last_ip file", function () {
         sendCompletionNotice: completionNoticeSpy
       })
 
-      createStubStoreFile({external: "1.2.3.4", internal: "5.6.7.8"}, function () {
 
-        var restoreJsonFile = ipTracker.__set__('jsonFile.writeFile', function (file, contents, cb) {
+
+      var restoreJsonFile
+
+      Q.all([
+        Q.nfcall(createTestGDriveFolder, null),
+        Q.nfcall(createStubStoreFile,{external: "1.2.3.4", internal: "5.6.7.8"})
+      ])
+      .spread (function (gdriveFolder, empty) {
+
+        gdriveFolderId = gdriveFolder.id
+
+        restoreJsonFile = ipTracker.__set__('jsonFile.writeFile', function (file, contents, cb) {
           var err = new Error("Simulated failure")
           cb(err)
         })
 
-
-        ipTracker(function () {
-          restoreJsonFile()
-          done()
-        })
+        return Q.nfcall(ipTracker,null)
       })
+      .done(function () {
+        restoreJsonFile()
+        done()
+      });
+
     })
 
+    after( function (done) {
+      restoreReporter()
+      cleanup({
+        gdriveFolderId: gdriveFolderId
+      },done)
+    })
 
     /*
      * Test for a completion notice
@@ -492,6 +665,8 @@ describe("Problems with the last_ip file", function () {
       completionNoticeSpy.callCount.should.equal(1)
       done()
     })
+
+    it("uploads a change report to the google drive")
 
     /*
      * Test for an error message
@@ -504,9 +679,12 @@ describe("Problems with the last_ip file", function () {
 
   })
 
-  after( function (done) {
-    restoreReporter()
-    cleanup(null,done)
-  })
+})
 
+
+
+describe("Problems with the google drive upload", function () {
+    it("google drive can't be reached")
+    it("parent folder can't be found")
+    it("multiple parent folders found with the same name")
 })

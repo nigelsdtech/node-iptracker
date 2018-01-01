@@ -2,7 +2,6 @@
   "appName": "ipTracker-test",
 
   "drive": {
-    "folderName": "To delete",
     "templateFile": "test/data/driveTemplateFile.txt"
   },
 
