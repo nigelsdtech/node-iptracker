@@ -292,14 +292,12 @@ var testCases = [
   oldIPStoreContents: {external:genericOldExtIP,  internal: genericOldIntIP},
   newIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP}},
 
-  { describe: "Running the script when no ips have changed",
-  only: true,
-  it: "leaves the last_ip file with the latest known ips",
+  { describe: "Running the script when no IPs have changed",
+  it: "leaves the last_ip file with the latest known IPs",
   oldIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP},
   newIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP},
   storeFileExistsAtStartOverrides: {
     yes : { isCompletionNoticeExpected: false }}},
-
 
   { describe: "Running the script when the external IP service returns a bad response",
   it: "does not update the last_ip file",
@@ -355,7 +353,6 @@ var testCases = [
       checkIPStoreOnCompletion: false,
       IPStoreExistsOnCompletion: false }}}
 
-
 ]
 
 
@@ -373,7 +370,8 @@ testCases.forEach( (el) => {
 
   describeFn(el.describe, function () {
 
-    var storeFileExistsAtStartStates = el.storeFileExistsAtStartStates || [ true, false ]
+    var storeFileExistsAtStartStates = [ true, false ]
+
 
     /*
      * Deviate based on whether a last_ip file existed when the script started
