@@ -293,7 +293,6 @@ var testCases = [
   newIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP}},
 
   { describe: "Running the script when no ips have changed",
-  only: true,
   it: "leaves the last_ip file with the latest known ips",
   oldIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP},
   newIPStoreContents: {external:serviceStubExtIP, internal: serviceStubIntIP},
