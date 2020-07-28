@@ -1,3 +1,3 @@
-var main = require('./lib/iptracker.js');
+var main = require('./compiled/iptracker.js');
 
 main();

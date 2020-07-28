@@ -1,87 +1,32 @@
 'use strict'
 
-var
+import {promises as fsPromises} from 'fs'
+import {createStubStoreFile, stubExtIpService, stubIntIpService} from './utils/IPService'
+import {createGDriveFolder, getGDriveFile, getGDriveFolderId, trashGDriveFolder, GDriveModel} from './utils/GDrive'
+import {writeFile} from 'jsonfile'
+import {getIPStoreFile} from './utils/misc'
+import {promisify} from 'util'
+//import GDriveModel from 'gdrive-model'
+
+const {unlink: deleteFile} = fsPromises
+
+const
   cfg          = require('config'),
   chai         = require('chai'),
-  fs           = require('fs'),
-  gdriveModel  = require('gdrive-model'),
-  jsonFile     = require('jsonfile'),
-  nock         = require('nock'),
-  path         = require('path'),
   Q            = require('q'),
   rewire       = require('rewire'),
   sinon        = require('sinon'),
-  ipTracker    = rewire('../../lib/iptracker.js')
+  ipTracker    = rewire('../../lib/iptracker.js'),
+  EmailNotification = require('email-notification')
 
 /*
  * Set up chai
  */
 chai.should();
 
-
-
-var timeout = (1000*10)
-
-
-/*
- * Some stubs
- */
-
-var serviceStubExtIP = "999.99.9.99"
-var serviceStubIntIP = "88.8.8.88"
-var genericOldExtIP  = "1.2.3.4"
-var genericOldIntIP  = "5.6.7.8"
-
-
-/*
- * Stubbed external IP service
- */
-function stubExtIpService (params) {
-
-  if (!params) params = {}
-  if (!params.response) params.response = {}
-  if (!params.response.statusCode) params.response.statusCode = 200
-  if (!params.response.body) params.response.body = {
-    "ip": serviceStubExtIP,
-    "ip_decimal":123456789,
-    "country":"Fictionland",
-    "city":"OfFiction",
-    "hostname":"fiction.test.com"
-  }
-
-  var ret = nock(cfg.ipService, {
-    reqheaders: {
-      'Accept': 'application/json'
-    }
-  })
-  .get("/")
-
-  if (params.replyWithError) return ret.replyWithError(params.replyWithError)
-
-  return ret.reply(params.response.statusCode, params.response.body)
-}
-
-/*
- * Stubbed internal IP service
- */
-function stubIntIpService (params) {
-
-  if (!params) params = {}
-  if (!params.response) params.response = { eth0: { inet: { addr: serviceStubIntIP } } }
-
-  var retFn = function (p,cb) {return Q.resolve(params.response)}
-  if (params.replyWithError) { retFn = function (p,cb) { return Q.reject(params.replyWithError) } }
-
-  var ipTrackerRewire = ipTracker.__set__('ifconfig', retFn)
-}
-
-
-
-
 /*
  * Some utility functions
  */
-
 
 
 
@@ -92,182 +37,211 @@ function stubIntIpService (params) {
  * @param {object}  params
  * @param {boolean} params.ipStoreFile - clean up the ipStoreFile
  */
-function cleanup (params,cb) {
+async function doCleanup ({
+  ipStoreFile = false,
+  gdriveFolderId = false,
+  gdrive = null
+}:{
+  ipStoreFile: false | string,
+  gdriveFolderId: false | string,
+  gdrive: null | GDriveModel
+}): Promise<void> {
 
-  var jobs = []
-
-  if (!params) { params = {} }
-
-  // Clean up the ipStoreFile
-  if (!params.hasOwnProperty('ipStoreFile') || params.ipStoreFile) { jobs.push(Q.nfcall(fs.unlink, cfg.ipStoreFile)) }
-
-  // Clean up Google drive file
-  if (params.hasOwnProperty('gdriveFolderId')) { jobs.push(Q.nfcall(trashTestGDriveFolder, {folderId: params.gdriveFolderId})) }
-
-  // Clean up google drive
-
-  Q.all(jobs)
-  .catch( function (err) {
-    if (!err.code == "ENOENT") console.error(err);
+  await Promise.all([
+    (ipStoreFile)?    deleteFile(ipStoreFile) : null,
+    (gdriveFolderId)? trashGDriveFolder({folderId: gdriveFolderId, gdrive: gdrive}) : null
+  ])
+  .catch((err) => {
+    if (err.code != "ENOENT") console.error(err);
   })
-  .done(function () { cb() })
-
-}
-
-/**
- * createStubStoreFile
- * @desc Create a generic stub store file
- *
- * @param {object}  params
- * @param {boolean} params.ext - external IP in the file
- * @param {boolean} params.int - internal IP in the file
- */
-function createStubStoreFile (params,cb) {
-
-  // Create a store file with the stub IP
-  jsonFile.writeFile(cfg.ipStoreFile, {
-    external: params.external,
-    internal: params.internal
-  }, function(err) {
-    if (err) throw new Error ('createStubStoreFile error: ' + err)
-    cb()
-  });
 
 }
 
 
 
-var personalGdrive = new gdriveModel({
+const recipientGdrive = new GDriveModel({
   googleScopes        : cfg.drive.scopes,
   clientSecretFile    : cfg.auth.clientSecretFile,
   tokenDir            : cfg.auth.tokenFileDir,
-  tokenFile           : cfg.auth.tokenFile
+  tokenFile           : cfg.auth.tokenFile,
+  userId              : "me"
 });
 
-/**
- * createTestGDriveFolder
- * @desc Create a temp google drive folder for test purposes
- *
- * @param {object}  params - currently unused
- *
- * @returns cb(err, folder) where folder is the google drive object representing the folder
- */
-function createTestGDriveFolder (params,cb) {
 
-  var d = new Date();
-  var desc =  "Test folder created by " + cfg.appName + " on " + d.toString();
-  var title = cfg.drive.folderName;
-
-  personalGdrive.createFile ({
-    isFolder : true,
-    resource: {
-      description: desc,
-      title: title
-    }
-  }, function (err, folder) {
-    if (err) { cb(err); return null; }
-    cb(null,folder);
-  })
-
+const enConfig = {
+  gmailSearchCriteria: `is:inbox is:unread from:${cfg.reporter.emailsFrom} subject:"%SUBJECT%"`,
+  format: 'minimal',
+  gmail: {
+    clientSecretFile : cfg.auth.clientSecretFile,
+    googleScopes     : cfg.auth.googleScopes,
+    name             : 'Notification finder',
+    tokenDir         : cfg.auth.tokenFileDir,
+    tokenFile        : cfg.auth.tokenFile,
+    userId : 'me'
+  },
+  maxResults: 1,
+  retFields: 'id',
+  metadataHeaders: [],
+  processedLabelName: null,
+  processedLabelId: null,
 }
 
-/**
- * testCompletionNotice
- * @desc Tests a completion notice contents
- *
- * @param {object}  params
- * @param {object}  params.completionNoticeSpy - The sinon spy that's been used to stub the completion notice emailer
- * @param {boolean} params.isCompletionNoticeExpected
- * @param {object}  params.ips -
- * @param {object}  params.ips.new
- * @param {string}  params.ips.new.external
- * @param {string}  params.ips.new.internal
- * @param {object}  params.ips.old
- * @param {string}  params.ips.old.external
- * @param {string}  params.ips.old.internal
- * @param {boolean} params.webViewLink
- *
- * @returns nothing
- */
-function testCompletionNotce (params,cb) {
+const enNotification = new EmailNotification(
+  Object.assign({}, enConfig, {
+    gmailSearchCriteria: enConfig.gmailSearchCriteria.replace('%SUBJECT%', `${cfg.appName} Report`)
+  })
+);
+const notificationHasBeenReceived = promisify(enNotification.hasBeenReceived)
 
-  if (params.isCompletionNoticeExpected) {
-    var emailBody = 'New details - {"external":"' + params.ips.new.external + '","internal":"' + params.ips.new.internal + '"}'
-    emailBody    += '<p>'
-    emailBody    += 'Old details - {"external":"' + params.ips.old.external + '","internal":"' + params.ips.old.internal + '"}'
-    emailBody    += '<p>'
-    emailBody    += 'File upload: ' + params.webViewLink
+const enError = new EmailNotification(
+  Object.assign( {}, enConfig, {
+    gmailSearchCriteria: enConfig.gmailSearchCriteria.replace('%SUBJECT%', `${cfg.appName} ERROR`)
+  })
+);
+const errorHasBeenReceived = promisify(enError.hasBeenReceived)
 
-    var completionNoticeArgs = {
-      body: emailBody
+
+
+
+
+const
+  timeout = cfg.testTimeout,
+  genericIntIPOld = '111.111.111.111',
+  genericIntIPNew = '111.111.111.222',
+  genericExtIPOld = '222.222.222.111',
+  genericExtIPNew = '222.222.222.222'
+
+
+type buildTestArgs = {
+  description: string,
+  only: boolean,
+  ipStoreContents: {
+    atStart: {
+      exists: boolean
+      contents: Object
+    },
+    atEnd: {
+      exists: boolean
+      expectedContents: Object
     }
-    params.completionNoticeSpy.getCall(0).args[0].should.deep.equal(completionNoticeArgs)
-    params.completionNoticeSpy.callCount.should.equal(1)
-
-  } else {
-    params.completionNoticeSpy.callCount.should.equal(0)
+  },
+  notificationEmail: {
+    isExpected: boolean
+  },
+  errorNotificationEmail: {
+    isExpected: boolean
   }
-
+  gdriveFile: {
+    isExpected: boolean
+  }
 }
 
-/**
- * testGDriveReport
- * @desc Tests a file that has been uploaded to google drive
- *
- * @param {object}  params
- * @param {string}  params.gdriveFileObj    - Object reference to a gdriveFile allowing you to change something about the original object
- *                                            (currently used to pass the webViewLink up and down)
- * @param {string}  params.gdriveFolderId   - id of the parent folder
- * @param {boolean} params.isUploadExpected - true if you were expecting a file to have been uploaded
- * @param {string}  cb - callback
- *
- * @returns cb() - no arguments
- * @throws - an error if there was a problem connecting to gdrive
- */
-function testGdriveReport (params,cb) {
 
-  personalGdrive.listFiles({
-    freetextSearch: '"' + params.gdriveFolderId + '" in parents and name = "' + path.basename(cfg.drive.templateFile) + '"',
-    spaces: "drive",
-    retFields: ['files(mimeType,size,webViewLink)']
-  }, function (err, retFiles) {
+function buildTest (params: buildTestArgs): void {
 
-    if (err) throw err
+  const {only, description} = params;
+  const describeFn = (only)? describe.only : describe;
 
-    if (params.isUploadExpected) {
-      retFiles[0].mimeType.should.equal('text/plain')
-      retFiles[0].size.should.not.equal('0')
-      params.gdriveFileObj.webViewLink = retFiles[0].webViewLink
-      retFiles.length.should.equal(1);
-    } else {
-      retFiles.length.should.equal(0);
+  describeFn(description, () => {
+
+    const outcomeStates = {
+      driveFile: null,
+      ipStoreFileContentsAtEnd: null,
+      hasNotificationBeenReceived: null,
+      hasErrorNoticeBeenReceived: null
     }
 
-    cb();
-  });
-}
 
-/**
- * trashTestGDriveFolder
- * @desc Trash a temp google drive folder for test purposes
- *
- * @param {object}  params - currently unused
- * @param {string}  params.folderId - ID of the folder to be deleted
- *
- * @returns cb(err)
- */
-function trashTestGDriveFolder (params,cb) {
+    before(async()=> {
 
-  personalGdrive.trashFiles ({
-    fileIds: [params.folderId],
-    deletePermanently: true
-  }, function (err, folder) {
-    if (err) { cb(err); return null; }
-    cb(null,folder);
+      const {exists, contents} = params.ipStoreContents.atStart
+      if (exists) {
+        await writeFile(cfg.ipStoreFile, contents)
+      }
+
+      const ret = await Promise.all([
+        ipTracker(),
+        getGDriveFolderId({folderName: cfg.drive.folderName, gdrive: recipientGdrive})
+      ])
+
+      const parentFolderId: string = ret[1]
+      
+
+      const [driveFile, ipStoreFileContentsAtEnd, hasNotificationBeenReceived, hasErrorNoticeBeenReceived] = await Promise.all([
+        
+        // driveFile
+        getGDriveFile({
+          parentFolderId:parentFolderId,
+          gdrive:recipientGdrive,
+          fileName:cfg.drive.templateFile
+        }),
+
+        // ipStoreFileContentsAtEnd
+        getIPStoreFile(cfg.ipStoreFile),
+
+        // hasNotificationBeenReceived
+        notificationHasBeenReceived(),
+
+        // hasErrorNoticeBeenReceived
+        errorHasBeenReceived()
+      ])
+
+      outcomeStates.driveFile = driveFile
+      outcomeStates.ipStoreFileContentsAtEnd = ipStoreFileContentsAtEnd
+      outcomeStates.hasErrorNoticeBeenReceived = hasNotificationBeenReceived
+      outcomeStates.hasErrorNoticeBeenReceived = hasErrorNoticeBeenReceived
+
+    })
+
+    const notificationEmailTitle =
+      (params.notificationEmail.isExpected)? "Sends an notification email" : "Doesn't send a notification email";
+
+    it(notificationEmailTitle, ()=> {
+      outcomeStates.hasNotificationBeenReceived.should.eql(params.notificationEmail.isExpected)
+    })
+
+
+    const errorEmailTitle = (params.errorNotificationEmail.isExpected)? "Sends an error email" : "Doesn't send an error email";
+
+    it(errorEmailTitle, ()=> {
+      outcomeStates.hasErrorNoticeBeenReceived.should.eql(params.errorNotificationEmail.isExpected)
+    })
+
+
+    if (params.gdriveFile.isExpected) {
+      it("Uploads a file to gdrive", () => {
+        outcomeStates.driveFile.size.should.not.eql(null)
+      })
+    } else {
+      it("Doesn't upload a file to gdrive", () => {
+        outcomeStates.driveFile.should.eql(null)
+      })
+    }
+    
+    if (params.ipStoreContents.atEnd.exists) {
+      it("Saves the new details to the IP Store file", () => {
+        outcomeStates.ipStoreFileContentsAtEnd.should.eql(params.ipStoreContents.atEnd.expectedContents)
+      })
+    } else {
+      it("IP Store file doesn't exist at the end", () => {
+        outcomeStates.ipStoreFileContentsAtEnd.should.eql('ENOENT')
+      })
+    }
+
+    after (async() => {
+
+      const {exists: existsAtStart} = params.ipStoreContents.atStart
+      const {exists: existsAtEnd} = params.ipStoreContents.atEnd
+  
+      await doCleanup({
+        ipStoreFile: (existsAtStart || existsAtEnd)? cfg.ipStoreFile : false,
+        gdriveFolderId: (params.gdriveFile.isExpected)? 123 : false,
+        gdrive: recipientGdrive
+      })
+    })
+
   })
-
 }
-
 
 
 
@@ -276,7 +250,7 @@ function trashTestGDriveFolder (params,cb) {
  * The tests
  */
 
-var testCases = [
+var testCases: iTestCase[] = [
   { describe: "Running the script when only the external IP has changed",
   it: "leaves the last_ip file with the latest known IPs",
   oldIPStoreContents: {external:genericOldExtIP,  internal: serviceStubIntIP},
@@ -359,16 +333,14 @@ var testCases = [
 
 
 
-testCases.forEach( (el) => {
+testCases.forEach( (el: iTestCase) => {
 
   /*
    * Start with the main test case
    */
 
-  var describeFn = describe
-  if (el.only) {
-    describeFn = describe.only
-  }
+  var describeFn = (el.only)? describe.only : describe;
+
 
   describeFn(el.describe, function () {
 
@@ -463,7 +435,7 @@ testCases.forEach( (el) => {
 
         after( function (done) {
           restore()
-          cleanup({
+          doCleanup({
             gdriveFolderId: gdriveFolderId
           },done)
         })
@@ -620,7 +592,7 @@ describe("Problems with the last_ip file", function () {
 
     after( function (done) {
       restoreReporter()
-      cleanup({
+      doCleanup({
         gdriveFolderId: gdriveFolderId
       },done)
     })
@@ -726,7 +698,7 @@ describe("Problems with the last_ip file", function () {
 
     after( function (done) {
       restoreReporter()
-      cleanup({
+      doCleanup({
         gdriveFolderId: gdriveFolderId
       },done)
     })
