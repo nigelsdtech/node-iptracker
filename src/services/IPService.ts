@@ -64,12 +64,13 @@ async function getInternalIP (): Promise<IPAddress> {
 
     log.debug(`getInternalIP - Getting...`)
 
-    const ifconfig = new Ifconfig();
+    const ifconfig = new Ifconfig({active: false});
     const ifconfigData = await ifconfig.listInterfaces()
+    log.debug(`getInternalIP - Got... ${JSON.stringify(ifconfigData,null,"\t")}`)
     const ip = (() => {
         try {
             const connectionWithIPv4 = ifconfigData.find(el => {
-                return el.hasOwnProperty("ipv4")
+                return (["eth0", "wlan0"].indexOf(el.name) > -1 && el.hasOwnProperty("ipv4"))
             })
 
             if (!connectionWithIPv4) throw new Error ('No device with ipv4 address')

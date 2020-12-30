@@ -10,7 +10,9 @@ module.exports = {
     clientSecretFile: defer( function (cfg) { return cfg.auth.credentialsDir+"/client_secret.json" } ),
     tokenFileDir:     defer( function (cfg) { return cfg.auth.credentialsDir } ),
     tokenFile:        defer( function (cfg) { return "access_token_"+cfg.appName+".json" } ),
-    scopes:           defer( function (cfg) { return cfg.drive.scopes } )
+    scopes:           defer( function (cfg) { return cfg.drive.scopes } ),
+    googleScopes: ["https://www.googleapis.com/auth/drive"]
+
   },
 
   drive: {
