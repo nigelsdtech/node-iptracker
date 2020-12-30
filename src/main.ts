@@ -80,22 +80,23 @@ async function main () {
         getOldExtIP({fileName: ipStoreFile}),
         getInternalIP(),
         getExternalIP()
-      ])
-  
+      ]).catch((e) => {
+        log.error(`Problem getting IPs - ${e}`)
+        throw new Error(e)
+      })
+
     /*
     * Test for changes in the IPs
     */
   
     log.info (`IPs: Internal [old: ${oldIntIP}, new: ${newIntIP}], External [old: ${oldExtIP}, new: ${newExtIP}]`)
   
-    const changed: boolean = hasIPChanged(oldIntIP, oldExtIP, newIntIP, newExtIP)
-    const isExtIPChanged = (newExtIP != oldExtIP)
-    const isIntIPChanged = (newIntIP != oldIntIP)
-
-    if (!isExtIPChanged && !isIntIPChanged) { log.info('No change in IP'); return;}
-
-    if (isExtIPChanged) log.info('External IP has changed')
-    if (isIntIPChanged) log.info('Internal IP has changed')  
+    const hasThereBeenChange: boolean = hasIPChanged(oldIntIP, oldExtIP, newIntIP, newExtIP)
+    
+    if (!hasThereBeenChange) {
+      log.info('No change. Exit script')
+      return;
+    }
   
     const ips = {
       old: {
@@ -108,7 +109,7 @@ async function main () {
       }
     }
 
-    const {googleScopes, tokenFile, tokenDir, clientSecretFile} = cfg.auth
+    const {googleScopes, tokenFile, tokenFileDir: tokenDir, clientSecretFile} = cfg.auth
     const {folderName, templateFile} = cfg.drive
 
     // Upload to drive

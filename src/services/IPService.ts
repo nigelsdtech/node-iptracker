@@ -68,13 +68,22 @@ async function getInternalIP (): Promise<IPAddress> {
     const ifconfigData = await ifconfig.listInterfaces()
     const ip = (() => {
         try {
-            return ifconfigData[0].ipv4[0].address
+            const connectionWithIPv4 = ifconfigData.find(el => {
+                return el.hasOwnProperty("ipv4")
+            })
+
+            if (!connectionWithIPv4) throw new Error ('No device with ipv4 address')
+
+            const ipv4: string = connectionWithIPv4.ipv4[0].address
+
+            return ipv4
         } catch (e) {
-            throw new Error ('getInternalIP - IP not in expected location')
+            log.error(`getInternalIp - IP not in expected location:\n${JSON.stringify(ifconfigData,null,"\t")}`)
+            throw new Error (`getInternalIP - IP not in expected location`)
         }
     })()
     
-    log.debug(`getInternalIP - got...${ip}`)
+    log.debug(`getInternalIP - Got ${ip}`)
 
     return new IPAddress(ip)
 }

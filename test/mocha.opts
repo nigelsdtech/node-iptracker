@@ -1,4 +1,0 @@
--b
---check-leaks
---recursive true
--r ts-node/register

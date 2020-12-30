@@ -1,11 +1,11 @@
-import reporter    from 'reporter'
 import {IPAddress} from '../model/IPAddress'
 import {promisify} from 'util'
 
 
 const 
     cfg    = require('config'),
-    log4js = require('log4js');
+    log4js = require('log4js'),
+    reporter = require('reporter');
 
 /*
 * Logs
@@ -37,11 +37,13 @@ async function handleError ({err}: { err: Error }) : Promise<void> {
     log.error(`handleError - ${err.stack}`)
 
     try {
-        const he = promisify (reporter.handleError)
+        const he = promisify (reporter.handleError).bind(reporter)
         await he ({errMsg: err.message})
     } catch (err) {
         log.error('handleError - failed to send error report: ' + err)
     }
+
+    log.error('handleError - Sent.')
 
 }
 
@@ -68,26 +70,28 @@ interface iCompletionNoticeArgs {
  */
 async function sendCompletionNotice (params: iCompletionNoticeArgs) {
 
-    const emailBody =
-      "New details - "
-      + JSON.stringify({external: params.ips.new.external, internal: params.ips.new.internal})
-      + "<p>"
-      + "Old details - "
-      + JSON.stringify({external: params.ips.old.external, internal: params.ips.old.internal})
-      + ((params.driveFileUrl && params.driveFileUrl != "")? `<p> File upload: ${params.driveFileUrl}` : "")
+    const emailBody = "New details - ".concat(
+      JSON.stringify({external: params.ips.new.external, internal: params.ips.new.internal}),
+      "<p>",
+      "Old details - ",
+      JSON.stringify({external: params.ips.old.external, internal: params.ips.old.internal}),
+      ((params.driveFileUrl && params.driveFileUrl != "")? `<p> File upload: ${params.driveFileUrl}` : "")
+    )
 
-      // Send it out to the listener
-     log.info('sendCompletionNotice: Sending...')
+    // Send it out to the listener
+    log.info('sendCompletionNotice: Sending...')
 
-      try {
-        const scn = promisify(reporter.sendCompletionNotice)
-        await scn({
-          body: emailBody
-        })
-      } catch (err) {
-        const e = new Error('sendCompletionNotice: Error while sending: ' + err.message)
-        await handleError({err: e})
-      }
+    try {
+      const scn = promisify(reporter.sendCompletionNotice).bind(reporter)
+      await scn({
+        body: emailBody
+      })
+    } catch (err) {
+      const e = new Error('sendCompletionNotice: Error while sending: ' + err.message)
+      await handleError({err: e})
+    }
+    log.info('sendCompletionNotice: Sent.')
+
 
 }
 

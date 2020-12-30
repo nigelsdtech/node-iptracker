@@ -8,7 +8,11 @@
     "start": "sh scripts/start.sh",
     "test": "sh scripts/test.sh"
   },
-  "files": ["lib/**/*", "config/**/*", "scripts/**/*"],
+  "files": [
+    "lib/**/*",
+    "config/**/*",
+    "scripts/**/*"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -22,7 +26,7 @@
     "reporter": "github:nigelsdtech/reporter",
     "request": "^2.83.0",
     "simple-ifconfig": "^0.2.2",
-    "typescript": "^3.7.5"
+    "typescript": "^3.9.7"
   },
   "devDependencies": {
     "@types/chai": "^4.2.8",
@@ -34,12 +38,14 @@
     "@types/request": "^2.48.4",
     "@types/rewire": "^2.5.28",
     "@types/sinon": "^7.5.1",
-    "chai": "^4.1.2",
+    "chai": "^4.2.0",
     "email-notification": "github:nigelsdtech/email-notification",
-    "mocha": "^4.0.1",
+    "md5": "^2.3.0",
+    "mocha": "^4.1.0",
     "nock": "^11.9.1",
     "rewire": "^4.0.1",
     "sinon": "^8.1.1",
+    "ts-mocha": "^8.0.0",
     "ts-node": "^8.10.2"
   }
 }

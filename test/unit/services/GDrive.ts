@@ -67,7 +67,7 @@ describe('GDrive', () => {
 
       before(async ()=> {
 
-        listFilesStub  = stub(GdriveModel.prototype, "listFiles").yields(null,[{id: 'parentFolder1'}])
+        listFilesStub  = stub(GdriveModel.prototype, "listFiles") .yields(null,[{id: 'parentFolder1'}])
         createFileStub = stub(GdriveModel.prototype, "createFile").yields(null,{webViewLink:retUrl})
 
         url = await uploadTrackerReport(utrArgs)
@@ -95,21 +95,23 @@ describe('GDrive', () => {
         url.should.eql(retUrl)
       })
     })
-
+    
     it("Throws an error if the file couldn't be uploaded", async () => {
-      listFilesStub  = stub(GdriveModel.prototype, "listFiles").yields(null,[{id: 'parentFolder1'}])
-      createFileStub = stub(GdriveModel.prototype, "createFile").yields('Error creating new file')
+      listFilesStub  = stub(GdriveModel.prototype, "listFiles") .yields(null,[{id: 'parentFolder1b'}])
+      createFileStub = stub(GdriveModel.prototype, "createFile").throws('Error creating new file')
 
-      const e = await getUtrError()
-      e.should.eql('Error creating new file')
+      const err: Error = await getUtrError()
+      .catch(e => {throw new Error(e)})
+
+      err.message.should.eql('uploadTrackerReport: Unable to upload iptracker file: Error creating new file')
     })
 
     it("Throws an error if there was a problem with the parent folder", async () => {
-      listFilesStub  = stub(GdriveModel.prototype, "listFiles").yields(null,[{id: 'parentFolder1'}, {id: 'paremtFolder2'}])
+      listFilesStub  = stub(GdriveModel.prototype, "listFiles").yields(null,[{id: 'parentFolder1'}, {id: 'parentFolder2'}])
       createFileStub = stub(GdriveModel.prototype, "createFile")
 
       const e = await getUtrError()
-      e.message.should.eql('drive: did not receive exactly one parent folder')
+      e.message.should.eql('uploadTrackerReport: Unable to get parent folder ID: Error: drive: did not receive exactly one parent folder')
       createFileStub.called.should.eql(false)
     })
   

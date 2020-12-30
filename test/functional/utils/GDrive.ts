@@ -1,7 +1,6 @@
 import {promisify} from 'util'
 import {basename as getBaseName} from 'path'
-import GDriveModel from 'gdrive-model'
-
+import GDriveModel from 'gdrive-model';
 
 /**
  * createTestGDriveFolder
@@ -22,18 +21,18 @@ async function createGDriveFolder ({
     const d = new Date();
     const desc =  `Test folder created by ${appName} on ${d.toString()}`;
     const title = folderName;
-  
-    const createFile = promisify(gdrive.createFile)
+
+    const createFile = promisify(GDriveModel.prototype.createFile).bind(gdrive)
     const newFolderObject = await createFile ({
-      isFolder : true,
-      resource: {
-        description: desc,
-        title: title
-      }
+        isFolder : true,
+        resource: {
+            description: desc,
+            title: title
+        }
     })
 
     return newFolderObject.id
-  
+
 }
 
 /**
@@ -52,17 +51,19 @@ async function getGDriveFile ({
     gdrive,
     retFields = ['files(mimeType,size,webViewLink)']
 } : {
-    parentFolderId?: string,
+    parentFolderId?: string | null,
     fileName: string,
     gdrive: GDriveModel
     retFields?: string[]
-}): Promise<any> {
+}): Promise<any | null > {
 
-    const freetextSearch = `name = "${getBaseName(fileName)}"`
-        + (parentFolderId)? ` AND ${parentFolderId}" in parents` : ""
-  
-    console.log(`Getting gdrive file with search: ${freetextSearch}`)
-    const listFiles = promisify(gdrive.listFiles)
+    const freetextSearch = "".concat(
+        `name = "${getBaseName(fileName)}"`,
+        (parentFolderId)? ` AND "${parentFolderId}" in parents` : ""
+    )
+
+    //console.log(`Getting gdrive file with search: ${freetextSearch}`)
+    const listFiles = promisify(GDriveModel.prototype.listFiles).bind(gdrive)
     const foundFiles = await listFiles ({
         freetextSearch: freetextSearch,
         spaces: "drive",
@@ -96,14 +97,20 @@ async function getGDriveFolderId({
 } : {
     folderName: string,
     gdrive: GDriveModel
-}) : Promise<string> {
+}) : Promise<any | null> {
     const folder = await getGDriveFile({fileName: folderName, gdrive: gdrive, retFields: ['files(id)']})
-    if (!folder.hasOwnProperty('id')) {
+    
+    if (!folder) return null;
+
+    if (folder.hasOwnProperty('id')) {
         const msg = `getGDriveFolderId: did not get an id - ${JSON.stringify(folder)}`
         console.error(msg)
         throw new Error(msg)
     }
+
     return folder.id
+
+    
 }
 
 /**
@@ -124,7 +131,7 @@ async function trashGDriveFolder ({
     gdrive: GDriveModel
 }): Promise<void> {
 
-    const trashFiles = promisify(gdrive.trashFiles)
+    const trashFiles = promisify(GDriveModel.prototype.trashFiles).bind(gdrive)
     await trashFiles ({
         fileIds: [folderId],
         deletePermanently: true

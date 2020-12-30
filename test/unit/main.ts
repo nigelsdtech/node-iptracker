@@ -6,7 +6,6 @@ import * as reporter                        from '../../src/services/reporter'
 import * as IPService                       from '../../src/services/IPService'
 import {IPAddress}                          from '../../src/model/IPAddress'
 import {stub, SinonStub}                    from 'sinon'
-import { config } from 'chai'
 
 const m = rewire('../../src/main')
 
@@ -190,31 +189,32 @@ describe('Main program', ()=>{
     const uploadTrackerReportTemplate : GDrive.iUploaderTrackerReportArgs = {
         ips: {
             new : {
-              internal: genericIntIPNew,
-              external: genericExtIPNew
+                internal: genericIntIPNew,
+                external: genericExtIPNew
             },
             old: {
-              internal: genericIntIPOld,
-              external: genericExtIPOld
+                internal: genericIntIPOld,
+                external: genericExtIPOld
             }
-          },
-          drive: {
+        },
+        drive: {
             auth: {
-              googleScopes: auth.googleScopes,
-              tokenFile: auth.tokenFile,
-              tokenDir: auth.tokenDir,
-              clientSecretFile: auth.clientSecretFile
+                googleScopes: auth.googleScopes,
+                tokenFile: auth.tokenFile,
+                tokenDir: auth.tokenFileDir,
+                clientSecretFile: auth.clientSecretFile
             },
             folderName: drive.folderName
-          },
-          templateFile: drive.templateFile,
-          appName: appName
+        },
+        templateFile: drive.templateFile,
+        appName: appName
     }
     
     const driveUrl = 'http://www.driveFileUrl.com'
- 
+
     const tests = [{
         description: 'Problems getting the old internal IP',
+        only: true,
         stubPackConfig: Object.assign({}, stubPackConfigTemplateError, {getOldIntIP: {throws: true, ret: 'Fake error getting old internal IP'}}),
         expectations: {errorNotice: 'Fake error getting old internal IP'}
     },{

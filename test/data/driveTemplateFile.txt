@@ -1,0 +1,1 @@
+This is the external IP: NEW_EXT_IP

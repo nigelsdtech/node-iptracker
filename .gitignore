@@ -59,9 +59,9 @@ typings/
 
 *.swp
 
-config/custom-environment-variables.json
+config/custom-environment-variables.*
 .last_ip.json
-config/local*.js*
+config/local*.*
 
 # Compiled typescript
-lib/
+compiled

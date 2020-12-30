@@ -2,7 +2,7 @@ import { getOldIntIP, getOldExtIP, saveNewIP } from '../../../src/services/Datas
 import { should } from 'chai';
 import 'mocha';
 import { IPAddress } from '../../../src/model/IPAddress';
-import jsonfile from 'jsonfile'
+import jsonfile, { Path } from 'jsonfile'
 import {stub} from 'sinon'
 import {promises as fsPromises} from 'fs'
 
@@ -22,16 +22,19 @@ describe('Datastore', ()=>{
     }
   
     it("saves data in the correct format", async () => {
+
       await saveNewIP({
         contents: content,
         fileName: fileName
       })
-  
+      
       const contents = await readFile(fileName)
-      contents.internal.should.eql('1.2.3.4')
-      contents.external.should.eql('5.6.7.8')
   
+    
+      contents.internal.should.eql('1.2.3.4')
+      contents.external.should.eql('5.6.7.8')        
       await deleteFile(fileName)
+    
     });
   
     it("returns an error if the data can't be saved and trashes the existing file", async () => {

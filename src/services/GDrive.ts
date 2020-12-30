@@ -37,7 +37,7 @@ async function getParentFolderId({folderName, g}:
   const freetextSearch = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
   log.info(`drive: Getting folder id with search query: ${freetextSearch}`);
 
-  const listFiles = promisify(g.listFiles)
+  const listFiles = promisify(g.listFiles).bind(g)
   const folderRes: {id: string}[] = await listFiles({
     freetextSearch: freetextSearch,
     spaces: 'drive',
@@ -97,13 +97,19 @@ interface iUploaderTrackerReportArgs {
 async function uploadTrackerReport({ips, drive, templateFile, appName} : iUploaderTrackerReportArgs) : Promise<string> {
 
 
-  log.info ('drive: Writing to google drive...')
+  const fn = "uploadTrackerReport"
+  log.info (`${fn}: Writing to google drive...`)
 
   // Update google drive
   // Create the drive object
   var g = new GdriveModel(drive.auth);
 
   const folderId: string = await getParentFolderId({folderName: drive.folderName, g:g})
+  .catch((e)=> {
+    const msg = `${fn}: Unable to get parent folder ID: ${e}`
+    log.error(msg)
+    throw new Error(msg)
+  })
 
   // Upload the file
   log.info('drive: Uploading iptracker file...');
@@ -113,7 +119,7 @@ async function uploadTrackerReport({ips, drive, templateFile, appName} : iUpload
   // Replace the content to drop in the new IP
   const hydratedContents = contents.replace(/NEW_EXT_IP/g, ips.new.external.toString());
   
-  const createFile = promisify(g.createFile)
+  const createFile = promisify(g.createFile).bind(g)
   const {webViewLink: url}: {webViewLink: string} = await createFile({
     media: {
       body: hydratedContents
@@ -125,6 +131,11 @@ async function uploadTrackerReport({ips, drive, templateFile, appName} : iUpload
       title: getBasename(templateFile)
     },
     retFields: ['webViewLink']
+  })
+  .catch((e)=> {
+    const msg = `${fn}: Unable to upload iptracker file: ${e}`
+    log.error(msg)
+    throw new Error(msg)
   })
 
   log.info('drive: iptracker file uploaded to ' + url)

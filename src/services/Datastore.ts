@@ -2,11 +2,11 @@ import {readFile, writeFile, Path}       from 'jsonfile';
 import {promises as fsPromises}          from 'fs';
 import memoizee                          from 'memoizee';
 import {IPAddress}                       from '../model/IPAddress'
+import {promisify}                       from 'util';
 
 const
     log4js         = require('log4js'),
     {log: logCfg}  = require('config');
-
 
 interface iStoreFileContents {
     internal: IPAddress
@@ -112,30 +112,29 @@ async function writeStoreFileContents ({contents, fileName} : iSaveNewIPArgs): P
     // Store to the file
     log.info(`${fn}: Writing to file...`)
 
-    try {
-        await writeFile(fileName, {
-            internal: contents.internal.toString(),
-            external: contents.external.toString()
-        })
-    } catch (err) {
+    return writeFile(fileName, {
+        internal: contents.internal.toString(),
+        external: contents.external.toString()
+    })
+    .then(()=> {
+        log.info(`${fn}: Written to file`)
+    })
+    .catch (async (err) => {
 
         const errMsg = `${fn}: Error writing to IP file: ${err.message}`
         log.error(errMsg)
 
         // Trash the old file and report on the error
-        try {
-            await fsPromises.unlink(fileName)
-        } catch (err2) {
+        await fsPromises.unlink(fileName)
+        .catch ((err2) => {
             if (err2.code != "ENOENT") {
                 const newErrMsg = errMsg + "| Additional error trashing the IP store file: " + err2.message
                 throw new Error(newErrMsg)
             }
-        }
+        })
 
         throw new Error(errMsg)
-    }
-
-    log.info(`${fn}: Written to file`)
+    })
 
 }
 
