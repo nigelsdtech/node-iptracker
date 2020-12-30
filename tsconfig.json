@@ -2,7 +2,7 @@
     "compilerOptions": {
         "esModuleInterop": true,
         "strictNullChecks": true,
-        "outDir": "lib",
+        "outDir": "compiled",
         "allowJs": true,
         "checkJs": true,
         "declaration": true
