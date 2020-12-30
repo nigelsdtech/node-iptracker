@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "esModuleInterop": true,
+        "strictNullChecks": true,
+        "outDir": "lib",
+        "allowJs": true,
+        "checkJs": true,
+        "declaration": true
+    },
+    "include": [
+        "src/**/*.ts"
+    ]
+}

@@ -1,0 +1,12 @@
+{
+    "mochaExplorer.files": "test/unit/**/*.ts",
+    "mochaExplorer.require": "ts-node/register",
+    "mochaExplorer.env": {
+        "NODE_ENV": "test"
+    },
+    "files.exclude": {
+        "compiled": true,
+    },
+    "npm.exclude": "compiled",
+    "mochaExplorer.ignore": ["compiled", "logs", "node_modules"]
+}

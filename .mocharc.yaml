@@ -1,0 +1,9 @@
+bail: true
+check-leaks: true
+recursive: true
+require:
+  - ts-node/register
+full-trace: true
+inline-diffs: true
+log-timer-events: true
+trace: true

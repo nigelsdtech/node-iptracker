@@ -1,7 +1,6 @@
 #!/bin/sh
 
-. ~/bin/setup_node_env.sh
-
 export NODE_ENV="test"
 
-mocha -b --check-leaks --recursive test
+#ts-mocha ./test/unit/*.ts
+ts-mocha ./test/functional/*.ts --timeout=15000
