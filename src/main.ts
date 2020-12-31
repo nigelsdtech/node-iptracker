@@ -45,7 +45,7 @@ module.exports = async function () {
  * @param newIntIP 
  * @param newExtIP 
  */
-function hasIPChanged (oldIntIP, oldExtIP, newIntIP, newExtIP): boolean {
+function hasIPChanged (oldIntIP: string, oldExtIP: string, newIntIP: string, newExtIP: string): boolean {
   const hasExtIPChanged = (newExtIP != oldExtIP)
   const hasIntIPChanged = (newIntIP != oldIntIP)
 
@@ -91,7 +91,7 @@ async function main () {
   
     log.info (`IPs: Internal [old: ${oldIntIP}, new: ${newIntIP}], External [old: ${oldExtIP}, new: ${newExtIP}]`)
   
-    const hasThereBeenChange: boolean = hasIPChanged(oldIntIP, oldExtIP, newIntIP, newExtIP)
+    const hasThereBeenChange: boolean = hasIPChanged(oldIntIP.ip, oldExtIP.ip, newIntIP.ip, newExtIP.ip)
     
     if (!hasThereBeenChange) {
       log.info('No change. Exit script')
