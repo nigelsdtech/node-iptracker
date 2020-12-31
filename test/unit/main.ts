@@ -214,7 +214,6 @@ describe('Main program', ()=>{
 
     const tests = [{
         description: 'Problems getting the old internal IP',
-        only: true,
         stubPackConfig: Object.assign({}, stubPackConfigTemplateError, {getOldIntIP: {throws: true, ret: 'Fake error getting old internal IP'}}),
         expectations: {errorNotice: 'Fake error getting old internal IP'}
     },{

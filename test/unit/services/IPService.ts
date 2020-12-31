@@ -62,7 +62,7 @@ describe('IPService', ()=>{
   })
   
   describe('getInternalIP', () => {
-   
+
     it("returns a valid IP", async ()=> {
       const i: IPAddress = await getInternalIP()
       const regex = RegExp(/^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/)
@@ -86,6 +86,7 @@ describe('IPService', ()=>{
     it("throws an error if the IP is bad", async ()=> {
 
       const s = stub(NetworkInfo.prototype, 'listInterfaces').resolves([{
+        name: "eth0",
         ipv4: [
           {address: 'This should have been an IP address'}
         ] 
