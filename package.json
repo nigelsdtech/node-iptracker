@@ -22,7 +22,7 @@
     "gdrive-model": "github:nigelsdtech/gdrive-model",
     "gmail-model": "github:nigelsdtech/gmail-model",
     "jsonfile": "^5.0.0",
-    "log4js": "^0.6.37",
+    "log4js": "^6.4.0",
     "memoizee": "^0.4.14",
     "reporter": "github:nigelsdtech/reporter",
     "request": "^2.83.0",
