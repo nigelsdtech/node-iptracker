@@ -17,7 +17,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "config": "^1.26.2",
+    "config": "^3.3.8",
     "email-notification": "github:nigelsdtech/email-notification",
     "gdrive-model": "github:nigelsdtech/gdrive-model",
     "gmail-model": "github:nigelsdtech/gmail-model",
